@@ -31,6 +31,7 @@ SUBROUTINE READ_USER_INPUT(input_file, file_type, output_file)
     IMPLICIT NONE
     CHARACTER(LEN = *), INTENT(OUT) :: input_file, file_type, output_file
     CHARACTER(LEN = 10)             :: file_extension
+    LOGICAL                         :: file_exists
 
     CALL GET_COMMAND_ARGUMENT(1,input_file)
     
@@ -58,6 +59,13 @@ SUBROUTINE READ_USER_INPUT(input_file, file_type, output_file)
         STOP
     END IF
 
+    !Check file exists
+    INQUIRE(FILE=input_file, EXIST=file_exists)
+    IF (file_exists .EQV. .FALSE.) THEN
+        WRITE(6,'(3A)') 'Specified file', TRIM(ADJUSTL(input_file)),' does not exist'
+        STOP
+    END IF
+
 END SUBROUTINE READ_USER_INPUT
 
 SUBROUTINE READ_GAUSSIAN(input_file, file_type, num_atoms, XYZ, atom_symbols, result, geom_found)
@@ -68,7 +76,7 @@ SUBROUTINE READ_GAUSSIAN(input_file, file_type, num_atoms, XYZ, atom_symbols, re
     CHARACTER(LEN = 100), ALLOCATABLE, INTENT(OUT) :: atom_symbols(:)
     INTEGER                                        :: reason, count_SO, doubledash, Idummy, J
     INTEGER, INTENT(OUT)                           :: num_atoms
-    LOGICAL                                        :: allocated
+    LOGICAL                                        :: allocated, zmat
     LOGICAL, INTENT(OUT)                           :: geom_found
     INTEGER, ALLOCATABLE                           :: atomic_numbers(:)
     REAL(KIND = 8), ALLOCATABLE, INTENT(OUT)       :: XYZ(:,:)
@@ -77,7 +85,7 @@ SUBROUTINE READ_GAUSSIAN(input_file, file_type, num_atoms, XYZ, atom_symbols, re
     geom_found  = .FALSE.
     allocated = .FALSE.
     doubledash  = 0
-
+    zmat = .FALSE.
 
     OPEN(33, FILE = TRIM(ADJUSTL(input_file)), STATUS = 'OLD')
     
@@ -117,11 +125,17 @@ SUBROUTINE READ_GAUSSIAN(input_file, file_type, num_atoms, XYZ, atom_symbols, re
                             IF (line(1:5) == '-----') doubledash = doubledash + 1
                         END DO
                         READ(33,*)
-                        READ(33,*)
-                        DO J = 1, num_atoms
-                            READ(33,*) atom_symbols(J), IDummy, XYZ(J,1), XYZ(J,2), XYZ(J,3)
-                        END DO
-                        geom_found = .TRUE.
+                        READ(33,*) line
+                        IF (line(1:8) == 'Z-Matrix') THEN
+                            zmat = .TRUE.
+                        END IF
+                        
+                        IF (zmat .EQV. .FALSE.) THEN
+                            DO J = 1, num_atoms
+                                READ(33,*) atom_symbols(J), IDummy, XYZ(J,1), XYZ(J,2), XYZ(J,3)
+                            END DO
+                            geom_found = .TRUE.
+                        END IF
                     END IF
                     
                     !Read in coordinates from standard orientation geometry
